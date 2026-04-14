@@ -1,0 +1,7 @@
+Quantum Output: {'000': 135, '001': 120, '010': 140, '011': 105}
+Best Route: A-C-E-D
+Cost: 23
+
+Visualization:
+Vehicle moves from A → C → E → D
+Optimal path highlighted in blue
