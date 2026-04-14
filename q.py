@@ -20,7 +20,7 @@ nodes = {
 node_list = list(nodes.keys())
 
 # -----------------------------
-# GENERATE ROUTES DYNAMICALLY
+# GENERATE ROUTES (Dynamic)
 # -----------------------------
 start = "A"
 end = "D"
@@ -29,14 +29,13 @@ all_routes = []
 
 for perm in permutations(node_list):
     if perm[0] == start and perm[-1] == end:
-        route = list(perm)
-        all_routes.append(route)
+        all_routes.append(list(perm))
 
-# limit routes (for demo)
+# Limit for demo
 all_routes = all_routes[:6]
 
 # -----------------------------
-# ASSIGN DATA (distance, traffic, weather)
+# ROUTE DATA
 # -----------------------------
 routes_data = {}
 
@@ -67,28 +66,41 @@ for r in routes_data:
     routes_data[r]["cost"] = calculate_cost(routes_data[r])
 
 # -----------------------------
-# QUANTUM SIMULATION
+# QUANTUM WITH ERROR MITIGATION
 # -----------------------------
-def quantum_selector(n_routes):
+def quantum_selector():
     n_qubits = 3
     qc = QuantumCircuit(n_qubits, n_qubits)
 
-    qc.h(range(n_qubits))
+    qc.h(range(n_qubits))  # superposition
     qc.measure(range(n_qubits), range(n_qubits))
 
     simulator = Aer.get_backend('aer_simulator')
+
+    # Error mitigation: more shots
     compiled = transpile(qc, simulator)
-    result = simulator.run(compiled, shots=1000).result()
+    result = simulator.run(compiled, shots=4096).result()
 
-    return result.get_counts()
+    counts = result.get_counts()
 
-# map quantum states to routes
-def map_states_to_routes(routes, counts):
+    # Error mitigation: filter noise
+    threshold = 50
+    filtered = {k: v for k, v in counts.items() if v > threshold}
+
+    total = sum(filtered.values())
+
+    probabilities = {k: v / total for k, v in filtered.items()}
+
+    return probabilities
+
+# -----------------------------
+# MAP STATES TO ROUTES
+# -----------------------------
+def map_states(routes, probs):
     route_keys = list(routes.keys())
     mapping = {}
-    states = list(counts.keys())
 
-    for i, state in enumerate(states):
+    for i, state in enumerate(probs.keys()):
         mapping[state] = route_keys[i % len(route_keys)]
 
     return mapping
@@ -96,23 +108,23 @@ def map_states_to_routes(routes, counts):
 # -----------------------------
 # SELECT BEST ROUTE
 # -----------------------------
-quantum_counts = quantum_selector(len(routes_data))
-mapping = map_states_to_routes(routes_data, quantum_counts)
+quantum_probs = quantum_selector()
+mapping = map_states(routes_data, quantum_probs)
 
 best_route = None
 best_score = float('inf')
 
-for state, freq in quantum_counts.items():
+for state, prob in quantum_probs.items():
     route = mapping[state]
     cost = routes_data[route]["cost"]
 
-    score = cost - (freq / 1000)
+    score = cost - prob
 
     if score < best_score:
         best_score = score
         best_route = route
 
-print("Quantum Output:", quantum_counts)
+print("Quantum Probabilities:", quantum_probs)
 print("Best Route:", best_route)
 print("Cost:", routes_data[best_route]["cost"])
 
@@ -158,13 +170,13 @@ running = True
 while running:
     screen.fill(WHITE)
 
-    # draw all edges
+    # Draw all edges
     for n1 in nodes:
         for n2 in nodes:
             if n1 != n2:
                 pygame.draw.line(screen, GRAY, nodes[n1], nodes[n2], 1)
 
-    # highlight best route
+    # Highlight best route
     for i in range(len(route_path)-1):
         pygame.draw.line(
             screen,
@@ -174,17 +186,20 @@ while running:
             4
         )
 
-    # draw nodes
+    # Draw nodes
     for node, pos in nodes.items():
         pygame.draw.circle(screen, BLACK, pos, 10)
         text = font.render(node, True, BLACK)
         screen.blit(text, (pos[0]+5, pos[1]-5))
 
-    # show cost
-    cost_text = font.render(f"Best Cost: {round(routes_data[best_route]['cost'],2)}", True, BLACK)
+    # Display cost
+    cost_text = font.render(
+        f"Best Cost: {round(routes_data[best_route]['cost'],2)}",
+        True, BLACK
+    )
     screen.blit(cost_text, (20, 20))
 
-    # move vehicle
+    # Move vehicle
     if current_target:
         reached = move_vehicle(vehicle_pos, current_target)
 
